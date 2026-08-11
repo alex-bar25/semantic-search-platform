@@ -1,4 +1,4 @@
-from data.load import corpus_from_rows, qrels_from_rows, queries_from_rows
+from data.load import corpus_from_rows, qrels_from_rows
 
 
 def test_corpus_joins_title_and_text():
@@ -9,11 +9,6 @@ def test_corpus_joins_title_and_text():
 def test_corpus_handles_empty_title():
     rows = [{"_id": "d2", "title": "", "text": "Body only."}]
     assert corpus_from_rows(rows) == {"d2": "Body only."}
-
-
-def test_queries_from_rows():
-    rows = [{"_id": "q1", "text": "what is an etf"}]
-    assert queries_from_rows(rows) == {"q1": "what is an etf"}
 
 
 def test_qrels_groups_by_query_and_drops_zero_scores():

@@ -2,9 +2,13 @@
 
 ## What this is
 A small semantic search platform for a CV portfolio: hybrid keyword + vector
-retrieval, with a PyTorch-trained cross-encoder re-ranker on top, served via
-FastAPI. The point is to demonstrate PyTorch, RAG, vector DB, and Pydantic
-skills clearly and simply. It is not a product. It is not infrastructure.
+retrieval, with a fine-tuned cross-encoder re-ranker on top, served via
+FastAPI. The point is to demonstrate RAG, vector DB, re-ranker fine-tuning,
+and Pydantic skills clearly and simply. It is not a product. It is not
+infrastructure.
+
+Use well-known libraries. Do not reinvent things that a famous, maintained
+package already does well.
 
 ## Context: keep this manageable
 I have ADHD. Long files, deep abstractions, and sprawling multi-file changes
@@ -27,8 +31,9 @@ exists to protect that. When in doubt, choose the smaller, more boring option.
   repetitive but readable function beats a clever one-liner.
 
 ## Stack (do not expand without asking)
-- PyTorch (MPS backend) for the cross-encoder re-ranker
+- sentence-transformers CrossEncoder (MPS backend) for the re-ranker
 - sentence-transformers (all-MiniLM-L6-v2) for embeddings
+- pytrec_eval for nDCG/MRR scoring
 - Chroma for the vector index
 - SQLite FTS5 for the keyword index
 - FastAPI + Pydantic for the API layer

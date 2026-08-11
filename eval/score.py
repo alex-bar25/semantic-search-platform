@@ -1,24 +1,4 @@
-import math
-
-
-def dcg(gains: list[float], k: int) -> float:
-    return sum(g / math.log2(i + 2) for i, g in enumerate(gains[:k]))
-
-
-def ndcg_at_k(ranked_ids: list[str], relevant: dict[str, int], k: int = 10) -> float:
-    gains = [relevant.get(doc_id, 0) for doc_id in ranked_ids[:k]]
-    ideal_gains = sorted(relevant.values(), reverse=True)
-    ideal = dcg(ideal_gains, k)
-    if ideal == 0.0:
-        return 0.0
-    return dcg(gains, k) / ideal
-
-
-def mrr_at_k(ranked_ids: list[str], relevant: dict[str, int], k: int = 10) -> float:
-    for i, doc_id in enumerate(ranked_ids[:k]):
-        if relevant.get(doc_id, 0) > 0:
-            return 1.0 / (i + 1)
-    return 0.0
+import pytrec_eval
 
 
 def evaluate(
@@ -26,16 +6,21 @@ def evaluate(
     qrels: dict[str, dict[str, int]],
     k: int = 10,
 ) -> dict[str, float]:
-    ndcgs = []
-    mrrs = []
-    for query_id, ranked_ids in run.items():
-        relevant = qrels.get(query_id)
-        if not relevant:
-            continue
-        ndcgs.append(ndcg_at_k(ranked_ids, relevant, k))
-        mrrs.append(mrr_at_k(ranked_ids, relevant, k))
-    if not ndcgs:
+    scored_run = {
+        query_id: {
+            doc_id: float(k - rank) for rank, doc_id in enumerate(ranked_ids[:k])
+        }
+        for query_id, ranked_ids in run.items()
+        if query_id in qrels and ranked_ids
+    }
+    if not scored_run:
         return {f"ndcg@{k}": 0.0, f"mrr@{k}": 0.0, "queries": 0}
+
+    evaluator = pytrec_eval.RelevanceEvaluator(qrels, {f"ndcg_cut.{k}", "recip_rank"})
+    per_query = evaluator.evaluate(scored_run)
+
+    ndcgs = [m[f"ndcg_cut_{k}"] for m in per_query.values()]
+    mrrs = [m["recip_rank"] for m in per_query.values()]
     return {
         f"ndcg@{k}": sum(ndcgs) / len(ndcgs),
         f"mrr@{k}": sum(mrrs) / len(mrrs),

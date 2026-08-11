@@ -15,10 +15,6 @@ def corpus_from_rows(rows: Iterable[dict]) -> dict[str, str]:
     return corpus
 
 
-def queries_from_rows(rows: Iterable[dict]) -> dict[str, str]:
-    return {row["_id"]: row["text"] for row in rows}
-
-
 def qrels_from_rows(rows: Iterable[dict]) -> dict[str, dict[str, int]]:
     qrels: dict[str, dict[str, int]] = {}
     for row in rows:
@@ -35,7 +31,8 @@ def load_corpus() -> dict[str, str]:
 
 
 def load_queries() -> dict[str, str]:
-    return queries_from_rows(load_dataset(CORPUS_REPO, "queries")["queries"])
+    rows = load_dataset(CORPUS_REPO, "queries")["queries"]
+    return {row["_id"]: row["text"] for row in rows}
 
 
 def load_qrels(split: str) -> dict[str, dict[str, int]]:
