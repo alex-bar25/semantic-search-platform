@@ -25,7 +25,8 @@ def qrels_from_rows(rows: Iterable[dict]) -> dict[str, dict[str, int]]:
         score = int(row["score"])
         if score <= 0:
             continue
-        qrels.setdefault(row["query-id"], {})[row["corpus-id"]] = score
+        query_id = str(row["query-id"])
+        qrels.setdefault(query_id, {})[str(row["corpus-id"])] = score
     return qrels
 
 

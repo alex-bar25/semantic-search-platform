@@ -27,3 +27,8 @@ def test_qrels_groups_by_query_and_drops_zero_scores():
         "q1": {"d1": 1, "d2": 2},
         "q2": {"d3": 1},
     }
+
+
+def test_qrels_coerces_integer_ids_to_strings():
+    rows = [{"query-id": 8, "corpus-id": 566392, "score": 1}]
+    assert qrels_from_rows(rows) == {"8": {"566392": 1}}
