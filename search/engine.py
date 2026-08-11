@@ -1,10 +1,31 @@
+import time
+from dataclasses import dataclass, field
+from functools import lru_cache
+
 from index import keyword, vector
 from rerank.model import rerank
 
 CANDIDATE_K = 100
 RERANK_K = 50
 HYBRID_WEIGHTS = [0.1, 1.0]
+CACHE_SIZE = 256
 MODES = ("keyword", "vector", "hybrid", "rerank")
+
+
+@dataclass
+class Hit:
+    doc_id: str
+    score: float
+    keyword_rank: int | None = None
+    vector_rank: int | None = None
+    rrf_score: float | None = None
+    rerank_score: float | None = None
+
+
+@dataclass
+class SearchOutcome:
+    hits: list[Hit] = field(default_factory=list)
+    timings: dict[str, float] = field(default_factory=dict)
 
 
 def rrf(
@@ -21,40 +42,111 @@ def rrf(
     return sorted(scores.items(), key=lambda pair: -pair[1])
 
 
+def _ranks(rows: list[tuple[str, float]]) -> dict[str, int]:
+    return {doc_id: i + 1 for i, (doc_id, _) in enumerate(rows)}
+
+
+def _elapsed_ms(started: float) -> float:
+    return round((time.perf_counter() - started) * 1000, 2)
+
+
 class SearchEngine:
     def __init__(self, conn=None, collection=None, model=None, reranker=None):
         self.conn = conn if conn is not None else keyword.connect()
         self.collection = collection if collection is not None else vector.connect()
         self.model = model if model is not None else vector.get_model()
         self.reranker = reranker
+        self._cached_search = lru_cache(maxsize=CACHE_SIZE)(self._search)
 
     def search(
         self, query: str, mode: str = "hybrid", top_k: int = 10
-    ) -> list[tuple[str, float]]:
+    ) -> SearchOutcome:
+        return self._cached_search(query, mode, top_k)
+
+    def cache_hits(self) -> int:
+        return self._cached_search.cache_info().hits
+
+    def _search(self, query: str, mode: str, top_k: int) -> SearchOutcome:
         if mode not in MODES:
             raise ValueError(f"mode must be one of {MODES}, got {mode!r}")
 
-        if mode == "keyword":
-            return keyword.search(self.conn, query, top_k)
-        if mode == "vector":
-            return vector.search(self.collection, self.model, query, top_k)
+        timings: dict[str, float] = {}
 
-        keyword_hits = [d for d, _ in keyword.search(self.conn, query, CANDIDATE_K)]
-        vector_hits = [
-            d for d, _ in vector.search(self.collection, self.model, query, CANDIDATE_K)
-        ]
-        fused = rrf([keyword_hits, vector_hits], weights=HYBRID_WEIGHTS)
+        if mode == "keyword":
+            started = time.perf_counter()
+            rows = keyword.search(self.conn, query, top_k)
+            timings["keyword_ms"] = _elapsed_ms(started)
+            hits = [
+                Hit(doc_id=doc_id, score=score, keyword_rank=i + 1)
+                for i, (doc_id, score) in enumerate(rows)
+            ]
+            return SearchOutcome(hits, timings)
+
+        if mode == "vector":
+            started = time.perf_counter()
+            rows = vector.search(self.collection, self.model, query, top_k)
+            timings["vector_ms"] = _elapsed_ms(started)
+            hits = [
+                Hit(doc_id=doc_id, score=score, vector_rank=i + 1)
+                for i, (doc_id, score) in enumerate(rows)
+            ]
+            return SearchOutcome(hits, timings)
+
+        started = time.perf_counter()
+        keyword_rows = keyword.search(self.conn, query, CANDIDATE_K)
+        timings["keyword_ms"] = _elapsed_ms(started)
+
+        started = time.perf_counter()
+        vector_rows = vector.search(self.collection, self.model, query, CANDIDATE_K)
+        timings["vector_ms"] = _elapsed_ms(started)
+
+        started = time.perf_counter()
+        fused = rrf(
+            [[d for d, _ in keyword_rows], [d for d, _ in vector_rows]],
+            weights=HYBRID_WEIGHTS,
+        )
+        timings["fusion_ms"] = _elapsed_ms(started)
+
+        keyword_ranks = _ranks(keyword_rows)
+        vector_ranks = _ranks(vector_rows)
+        rrf_scores = dict(fused)
 
         if mode == "hybrid":
-            return fused[:top_k]
+            hits = [
+                Hit(
+                    doc_id=doc_id,
+                    score=score,
+                    rrf_score=score,
+                    keyword_rank=keyword_ranks.get(doc_id),
+                    vector_rank=vector_ranks.get(doc_id),
+                )
+                for doc_id, score in fused[:top_k]
+            ]
+            return SearchOutcome(hits, timings)
 
         if self.reranker is None:
             raise RuntimeError(
                 "No trained re-ranker loaded. Train one with: uv run python -m rerank.train"
             )
+
         candidate_ids = [doc_id for doc_id, _ in fused[:RERANK_K]]
         texts = self.texts_for(candidate_ids)
-        return rerank(self.reranker, query, candidate_ids, texts)[:top_k]
+        started = time.perf_counter()
+        ranked = rerank(self.reranker, query, candidate_ids, texts)
+        timings["rerank_ms"] = _elapsed_ms(started)
+
+        hits = [
+            Hit(
+                doc_id=doc_id,
+                score=score,
+                rerank_score=score,
+                rrf_score=rrf_scores.get(doc_id),
+                keyword_rank=keyword_ranks.get(doc_id),
+                vector_rank=vector_ranks.get(doc_id),
+            )
+            for doc_id, score in ranked[:top_k]
+        ]
+        return SearchOutcome(hits, timings)
 
     def texts_for(self, doc_ids: list[str]) -> list[str]:
         if not doc_ids:

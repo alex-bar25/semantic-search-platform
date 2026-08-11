@@ -6,7 +6,7 @@ from sentence_transformers import InputExample
 from torch.utils.data import DataLoader
 
 from data.load import load_corpus, load_qrels, load_queries
-from rerank.model import CHECKPOINT_PATH, new_model
+from rerank.model import CHECKPOINT_PATH, is_trained, new_model
 from search.engine import RERANK_K, SearchEngine
 
 NEGATIVES_PER_QUERY = 7
@@ -38,7 +38,9 @@ def build_examples(
         positives = set(qrels[query_id])
         if not query_text or not positives:
             continue
-        candidates = [d for d, _ in engine.search(query_text, "hybrid", RERANK_K)]
+        candidates = [
+            hit.doc_id for hit in engine.search(query_text, "hybrid", RERANK_K).hits
+        ]
         negatives = select_negatives(candidates, positives, negatives_per_query)
         for positive_id in positives:
             if positive_id in corpus:
@@ -75,9 +77,11 @@ def train(examples, epochs: int = EPOCHS, batch_size: int = BATCH_SIZE):
         epochs=epochs,
         warmup_steps=int(0.1 * len(loader) * epochs),
         optimizer_params={"lr": LEARNING_RATE},
-        output_path=CHECKPOINT_PATH,
         show_progress_bar=True,
     )
+    model.save(CHECKPOINT_PATH)
+    if not is_trained(CHECKPOINT_PATH):
+        raise RuntimeError(f"Training finished but nothing was saved to {CHECKPOINT_PATH}")
     print(f"Saved checkpoint to {CHECKPOINT_PATH}")
     return model
 

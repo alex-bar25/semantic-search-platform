@@ -44,7 +44,7 @@ def evaluate(
 
 def evaluate_mode(engine, queries, qrels, mode: str, k: int = 10) -> dict[str, float]:
     run = {
-        query_id: [doc_id for doc_id, _ in engine.search(queries[query_id], mode, k)]
+        query_id: [hit.doc_id for hit in engine.search(queries[query_id], mode, k).hits]
         for query_id in qrels
     }
     return evaluate(run, qrels, k)

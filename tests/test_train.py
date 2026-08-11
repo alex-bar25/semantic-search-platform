@@ -1,6 +1,7 @@
 from sentence_transformers import InputExample
 
 from rerank.train import build_examples, load_examples, save_examples, select_negatives
+from search.engine import Hit, SearchOutcome
 
 
 def test_examples_survive_a_save_load_roundtrip(tmp_path):
@@ -33,7 +34,13 @@ def test_select_negatives_returns_fewer_when_not_enough_candidates():
 
 class FakeEngine:
     def search(self, query, mode="hybrid", top_k=10):
-        return [("n1", 1.0), ("p1", 0.9), ("n2", 0.8), ("n3", 0.7)]
+        hits = [
+            Hit(doc_id="n1", score=1.0),
+            Hit(doc_id="p1", score=0.9),
+            Hit(doc_id="n2", score=0.8),
+            Hit(doc_id="n3", score=0.7),
+        ]
+        return SearchOutcome(hits, {})
 
 
 CORPUS = {
