@@ -1,4 +1,20 @@
-from rerank.train import build_examples, select_negatives
+from sentence_transformers import InputExample
+
+from rerank.train import build_examples, load_examples, save_examples, select_negatives
+
+
+def test_examples_survive_a_save_load_roundtrip(tmp_path):
+    path = str(tmp_path / "examples.json")
+    original = [
+        InputExample(texts=["q", "positive"], label=1.0),
+        InputExample(texts=["q", "negative"], label=0.0),
+    ]
+    save_examples(original, path)
+    restored = load_examples(path)
+    assert [(e.texts, e.label) for e in restored] == [
+        (["q", "positive"], 1.0),
+        (["q", "negative"], 0.0),
+    ]
 
 
 def test_select_negatives_excludes_positives():
@@ -34,7 +50,7 @@ def test_build_examples_labels_positives_and_negatives():
         {"q1": "a query"},
         {"q1": {"p1": 1}},
         CORPUS,
-        negatives_per_positive=2,
+        negatives_per_query=2,
     )
     labels = sorted(e.label for e in examples)
     assert labels == [0.0, 0.0, 1.0]
@@ -46,7 +62,7 @@ def test_build_examples_excludes_the_positive_from_negatives():
         {"q1": "a query"},
         {"q1": {"p1": 1}},
         CORPUS,
-        negatives_per_positive=3,
+        negatives_per_query=3,
     )
     negative_texts = [e.texts[1] for e in examples if e.label == 0.0]
     assert CORPUS["p1"] not in negative_texts
@@ -55,14 +71,14 @@ def test_build_examples_excludes_the_positive_from_negatives():
 def test_build_examples_pairs_each_text_with_the_query():
     examples = build_examples(
         FakeEngine(), {"q1": "a query"}, {"q1": {"p1": 1}}, CORPUS,
-        negatives_per_positive=1,
+        negatives_per_query=1,
     )
     assert all(e.texts[0] == "a query" for e in examples)
 
 
 def test_build_examples_skips_queries_missing_from_the_queries_file():
     examples = build_examples(
-        FakeEngine(), {}, {"q1": {"p1": 1}}, CORPUS, negatives_per_positive=1
+        FakeEngine(), {}, {"q1": {"p1": 1}}, CORPUS, negatives_per_query=1
     )
     assert examples == []
 
@@ -73,7 +89,7 @@ def test_build_examples_skips_docs_missing_from_the_corpus():
         {"q1": "a query"},
         {"q1": {"missing_doc": 1}},
         CORPUS,
-        negatives_per_positive=1,
+        negatives_per_query=1,
     )
     assert all(e.label == 0.0 for e in examples)
 
@@ -82,6 +98,6 @@ def test_build_examples_respects_limit():
     queries = {"q1": "one", "q2": "two", "q3": "three"}
     qrels = {"q1": {"p1": 1}, "q2": {"p1": 1}, "q3": {"p1": 1}}
     examples = build_examples(
-        FakeEngine(), queries, qrels, CORPUS, negatives_per_positive=1, limit=2
+        FakeEngine(), queries, qrels, CORPUS, negatives_per_query=1, limit=2
     )
     assert len({e.texts[0] for e in examples}) == 2

@@ -1,5 +1,6 @@
 import pytest
 
+from search import engine as engine_module
 from search.engine import SearchEngine
 
 
@@ -17,8 +18,6 @@ DOCS = {"k1": "keyword one", "k2": "keyword two", "v1": "vector one", "v2": "vec
 
 @pytest.fixture
 def engine(monkeypatch):
-    from search import engine as engine_module
-
     monkeypatch.setattr(
         engine_module.keyword, "search", lambda conn, q, k: [("k1", 9.0), ("k2", 8.0)]
     )
@@ -65,8 +64,6 @@ def test_rerank_without_a_trained_model_raises(engine):
 
 
 def test_rerank_mode_uses_the_reranker(monkeypatch):
-    from search import engine as engine_module
-
     monkeypatch.setattr(
         engine_module.keyword, "search", lambda conn, q, k: [("k1", 9.0)]
     )

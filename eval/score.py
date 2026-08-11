@@ -1,6 +1,8 @@
 import pytrec_eval
 
-MODES = ("keyword", "vector", "hybrid", "rerank")
+from data.load import load_qrels, load_queries
+from rerank.model import is_trained, load_trained
+from search.engine import MODES, SearchEngine
 
 
 def evaluate(
@@ -49,16 +51,10 @@ def evaluate_mode(engine, queries, qrels, mode: str, k: int = 10) -> dict[str, f
 
 
 if __name__ == "__main__":
-    import os
-
-    from data.load import load_qrels, load_queries
-    from rerank.model import CHECKPOINT_PATH
-    from search.engine import SearchEngine
-
     queries = load_queries()
     qrels = load_qrels("test")
-    trained = os.path.exists(CHECKPOINT_PATH)
-    engine = SearchEngine(load_reranker=trained)
+    trained = is_trained()
+    engine = SearchEngine(reranker=load_trained() if trained else None)
 
     print(f"\nFiQA-2018 test set, {len(qrels)} queries\n")
     print("| config | nDCG@10 | MRR@10 |")

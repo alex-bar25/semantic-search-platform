@@ -12,8 +12,12 @@ def new_model() -> CrossEncoder:
     return CrossEncoder(BACKBONE, num_labels=1, max_length=MAX_LENGTH)
 
 
+def is_trained(path: str = CHECKPOINT_PATH) -> bool:
+    return os.path.exists(path)
+
+
 def load_trained(path: str = CHECKPOINT_PATH) -> CrossEncoder:
-    if not os.path.exists(path):
+    if not is_trained(path):
         raise FileNotFoundError(
             f"No trained re-ranker at {path}. Train one with: uv run python -m rerank.train"
         )

@@ -1,13 +1,21 @@
+import json
+import os
+from pathlib import Path
+
 from sentence_transformers import InputExample
 from torch.utils.data import DataLoader
 
+from data.load import load_corpus, load_qrels, load_queries
 from rerank.model import CHECKPOINT_PATH, new_model
+from search.engine import RERANK_K, SearchEngine
 
-NEGATIVES_PER_POSITIVE = 7
-MINE_K = 50
+NEGATIVES_PER_QUERY = 7
 EPOCHS = 1
 BATCH_SIZE = 16
 LEARNING_RATE = 2e-5
+EXAMPLES_PATH = str(
+    Path(__file__).resolve().parent.parent / "data" / "train_examples.json"
+)
 
 
 def select_negatives(candidates: list[str], positives: set[str], n: int) -> list[str]:
@@ -20,7 +28,7 @@ def build_examples(
     queries: dict[str, str],
     qrels: dict[str, dict[str, int]],
     corpus: dict[str, str],
-    negatives_per_positive: int = NEGATIVES_PER_POSITIVE,
+    negatives_per_query: int = NEGATIVES_PER_QUERY,
     limit: int | None = None,
 ) -> list[InputExample]:
     examples = []
@@ -30,8 +38,8 @@ def build_examples(
         positives = set(qrels[query_id])
         if not query_text or not positives:
             continue
-        candidates = [d for d, _ in engine.search(query_text, "hybrid", MINE_K)]
-        negatives = select_negatives(candidates, positives, negatives_per_positive)
+        candidates = [d for d, _ in engine.search(query_text, "hybrid", RERANK_K)]
+        negatives = select_negatives(candidates, positives, negatives_per_query)
         for positive_id in positives:
             if positive_id in corpus:
                 examples.append(
@@ -45,6 +53,18 @@ def build_examples(
         if (i + 1) % 250 == 0:
             print(f"mined {i + 1}/{len(query_ids)} queries, {len(examples)} examples")
     return examples
+
+
+def save_examples(examples, path: str = EXAMPLES_PATH) -> None:
+    rows = [{"texts": e.texts, "label": e.label} for e in examples]
+    with open(path, "w") as handle:
+        json.dump(rows, handle)
+
+
+def load_examples(path: str = EXAMPLES_PATH) -> list[InputExample]:
+    with open(path) as handle:
+        rows = json.load(handle)
+    return [InputExample(texts=r["texts"], label=r["label"]) for r in rows]
 
 
 def train(examples, epochs: int = EPOCHS, batch_size: int = BATCH_SIZE):
@@ -63,17 +83,18 @@ def train(examples, epochs: int = EPOCHS, batch_size: int = BATCH_SIZE):
 
 
 if __name__ == "__main__":
-    from data.load import load_corpus, load_qrels, load_queries
-    from search.engine import SearchEngine
-
-    engine = SearchEngine()
-    corpus = load_corpus()
-    queries = load_queries()
-    train_qrels = load_qrels("train")
-
-    print(f"Mining hard negatives over {len(train_qrels)} training queries...")
-    examples = build_examples(engine, queries, train_qrels, corpus)
-    positives = sum(1 for e in examples if e.label == 1.0)
-    print(f"Built {len(examples)} examples ({positives} positive)")
+    if os.path.exists(EXAMPLES_PATH):
+        examples = load_examples()
+        print(f"Reusing {len(examples)} mined examples from {EXAMPLES_PATH}")
+    else:
+        engine = SearchEngine()
+        train_qrels = load_qrels("train")
+        print(f"Mining hard negatives over {len(train_qrels)} training queries...")
+        examples = build_examples(
+            engine, load_queries(), train_qrels, load_corpus()
+        )
+        save_examples(examples)
+        positives = sum(1 for e in examples if e.label == 1.0)
+        print(f"Built {len(examples)} examples ({positives} positive)")
 
     train(examples)

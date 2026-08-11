@@ -1,5 +1,5 @@
 from index import keyword, vector
-from rerank.model import load_trained, rerank
+from rerank.model import rerank
 
 CANDIDATE_K = 100
 RERANK_K = 50
@@ -22,21 +22,11 @@ def rrf(
 
 
 class SearchEngine:
-    def __init__(
-        self,
-        load_reranker: bool = False,
-        conn=None,
-        collection=None,
-        model=None,
-        reranker=None,
-    ):
+    def __init__(self, conn=None, collection=None, model=None, reranker=None):
         self.conn = conn if conn is not None else keyword.connect()
         self.collection = collection if collection is not None else vector.connect()
         self.model = model if model is not None else vector.get_model()
-        if reranker is not None:
-            self.reranker = reranker
-        else:
-            self.reranker = load_trained() if load_reranker else None
+        self.reranker = reranker
 
     def search(
         self, query: str, mode: str = "hybrid", top_k: int = 10
@@ -63,9 +53,8 @@ class SearchEngine:
                 "No trained re-ranker loaded. Train one with: uv run python -m rerank.train"
             )
         candidate_ids = [doc_id for doc_id, _ in fused[:RERANK_K]]
-        return rerank(self.reranker, query, candidate_ids, self.texts_for(candidate_ids))[
-            :top_k
-        ]
+        texts = self.texts_for(candidate_ids)
+        return rerank(self.reranker, query, candidate_ids, texts)[:top_k]
 
     def texts_for(self, doc_ids: list[str]) -> list[str]:
         if not doc_ids:
@@ -73,6 +62,3 @@ class SearchEngine:
         result = self.collection.get(ids=doc_ids)
         by_id = dict(zip(result["ids"], result["documents"]))
         return [by_id.get(doc_id, "") for doc_id in doc_ids]
-
-    def text_for(self, doc_id: str) -> str:
-        return self.texts_for([doc_id])[0]

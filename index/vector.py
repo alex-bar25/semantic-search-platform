@@ -3,6 +3,8 @@ from pathlib import Path
 import chromadb
 from sentence_transformers import SentenceTransformer
 
+from data.load import load_corpus
+
 CHROMA_PATH = str(Path(__file__).resolve().parent.parent / "data" / "chroma")
 COLLECTION_NAME = "fiqa"
 MODEL_NAME = "all-MiniLM-L6-v2"
@@ -57,8 +59,6 @@ def search(collection, model, query: str, k: int = 100) -> list[tuple[str, float
 
 
 if __name__ == "__main__":
-    from data.load import load_corpus
-
     corpus = load_corpus()
     build(corpus)
     print(f"Embedded {len(corpus)} documents into {CHROMA_PATH}")

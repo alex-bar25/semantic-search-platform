@@ -7,4 +7,5 @@ docs
 .pytest_cache
 data/*.db
 data/chroma/
-rerank/checkpoint.pt
+rerank/checkpoint/
+data/train_examples.json

@@ -3,6 +3,8 @@ import re
 import sqlite3
 from pathlib import Path
 
+from data.load import load_corpus
+
 DB_PATH = str(Path(__file__).resolve().parent.parent / "data" / "keyword.db")
 
 
@@ -44,8 +46,6 @@ def search(
 
 
 if __name__ == "__main__":
-    from data.load import load_corpus
-
     corpus = load_corpus()
     build(corpus)
     print(f"Indexed {len(corpus)} documents into {DB_PATH}")
