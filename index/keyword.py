@@ -1,8 +1,9 @@
 import os
 import re
 import sqlite3
+from pathlib import Path
 
-DB_PATH = "data/keyword.db"
+DB_PATH = str(Path(__file__).resolve().parent.parent / "data" / "keyword.db")
 
 
 def build(corpus: dict[str, str], db_path: str = DB_PATH) -> None:

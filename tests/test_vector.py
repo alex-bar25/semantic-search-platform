@@ -21,10 +21,6 @@ def collection(tmp_path_factory):
     return vector.connect(path)
 
 
-def test_pick_device_returns_known_device():
-    assert vector.pick_device() in {"mps", "cpu"}
-
-
 def test_search_finds_semantically_related_doc(collection, model):
     results = vector.search(collection, model, "how does saving money grow", k=3)
     assert results[0][0] == "d3"

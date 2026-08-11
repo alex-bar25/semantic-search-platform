@@ -1,23 +1,17 @@
+from pathlib import Path
+
 import chromadb
-import torch
 from sentence_transformers import SentenceTransformer
 
-CHROMA_PATH = "data/chroma"
+CHROMA_PATH = str(Path(__file__).resolve().parent.parent / "data" / "chroma")
 COLLECTION_NAME = "fiqa"
 MODEL_NAME = "all-MiniLM-L6-v2"
 BATCH_SIZE = 256
 ADD_CHUNK = 5000
 
 
-def pick_device() -> str:
-    if torch.backends.mps.is_available():
-        return "mps"
-    print("WARNING: MPS unavailable, falling back to CPU. This will be slow.")
-    return "cpu"
-
-
-def get_model(device: str | None = None) -> SentenceTransformer:
-    return SentenceTransformer(MODEL_NAME, device=device or pick_device())
+def get_model() -> SentenceTransformer:
+    return SentenceTransformer(MODEL_NAME)
 
 
 def build(corpus: dict[str, str], path: str = CHROMA_PATH) -> None:

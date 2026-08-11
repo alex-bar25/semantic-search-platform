@@ -57,6 +57,14 @@ def test_no_judged_queries_returns_zeros():
     }
 
 
-def test_empty_ranking_is_skipped():
+def test_empty_ranking_scores_zero_rather_than_being_dropped():
     result = evaluate({"q1": [], "q2": ["a"]}, {"q1": {"a": 1}, "q2": {"a": 1}}, k=10)
-    assert result["queries"] == 1
+    assert result["queries"] == 2
+    assert result["ndcg@10"] == pytest.approx(0.5, rel=1e-6)
+    assert result["mrr@10"] == pytest.approx(0.5, rel=1e-6)
+
+
+def test_all_empty_rankings_score_zero():
+    result = evaluate({"q1": [], "q2": []}, {"q1": {"a": 1}, "q2": {"a": 1}}, k=10)
+    assert result["queries"] == 2
+    assert result["ndcg@10"] == 0.0
